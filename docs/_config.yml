@@ -9,7 +9,7 @@
 title: IFT6266 Blog
 email: louis.vanbeurden@gmail.com
 description: > # this means to ignore newlines until "baseurl:"
-	Blog post on the advencement of my deep learning project for the course ift6266.
+ Blog post on the advencement of my deep learning project for the course ift6266.
 baseurl: "" # the subpath of your site, e.g. /blog
 github_username:  ogrergo
 
