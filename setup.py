@@ -7,6 +7,12 @@ DATASET_FOLDER = "dataset"
 
 
 def install_dataset():
+    try:
+        os.makedirs(DATASET_FOLDER)
+    except FileExistsError:
+        pass
+
+
     if not os.path.isfile(os.path.join(DATASET_FOLDER, DATASET_FILE)):
         print("Downloading dataset ...")
         filename = wget.download(DATASET_URL, out=os.path.join(DATASET_FOLDER, DATASET_FILE))
