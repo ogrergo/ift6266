@@ -1,0 +1,9 @@
+scikit-image
+wget
+matplotlib
+theano
+numpy
+h5py
+pydot
+pydot-ng
+keras
