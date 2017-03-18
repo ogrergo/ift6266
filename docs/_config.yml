@@ -15,3 +15,5 @@ github_username:  ogrergo
 
 # Build settings
 markdown: kramdown
+
+theme: jekyll-theme-minimal
