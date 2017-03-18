@@ -51,7 +51,7 @@ def model_autoencoder():
     return m
 
 
-def test_ae(imgs, epoch, ae, save=True):
+def test_ae(imgs, epoch, ae, save=True, show=True):
     result = [(ae.predict(np.expand_dims(e, axis=0)).transpose((0, 2,3,1)).squeeze(axis=0) * 255).astype('uint8') for e in imgs]
     rows = len(imgs) // 10
     img = np.zeros(shape=(64 * 10, 64 * rows, 3), dtype='uint8')
@@ -61,20 +61,21 @@ def test_ae(imgs, epoch, ae, save=True):
         x, y = index(i)
         img[x:(64 + x), y:(64 + y), :] = result[i]
 
+    if show:
+        Image.fromarray(img).show()
 
-    Image.fromarray(img).show()
     if save:
         save_image('auto_encoder', "epoch_%d"%epoch, img)
 
 
-def train_ae(model, sets):
+def train_ae(model, sets, show=False):
     output_train, output_valid, output_test = sets
     input_train = get_border(output_train)
     input_valid = get_border(output_valid)
     input_test = get_border(output_test)
 
     def visualisation(epoch, log):
-        test_ae([input_test[i] for i in range(100)], epoch, model)
+        test_ae([input_test[i] for i in range(100)], epoch, model, show=show)
 
     visualisation(0, None)
 
