@@ -12,7 +12,7 @@ from utils import conv_layer, DenseTied
 
 
 def model_autoencoder():
-    features = [16, 32]
+    features = [16, 32, 64]
 
     reversed_features = features[len(features) - 2::-1] + [3]
     _ae_hid = 256
@@ -21,7 +21,7 @@ def model_autoencoder():
 
     _out = _input
     for f in features:
-        _out = conv_layer(f, _out)
+        _out = conv_layer(f, _out, batch_norm=False, activation='elu')
 
     _shape = _out._keras_shape[1:]
 
@@ -34,7 +34,7 @@ def model_autoencoder():
     _out = Reshape(_shape)(_out)
 
     for f in reversed_features:
-        _out = conv_layer(f, _out, deconv=True)
+        _out = conv_layer(f, _out, deconv=True, batch_norm=False, activation='elu')
 
     def reconstitution(x):
         return T.set_subtensor(_input[:, :, 16:48, 16:48], K.clip(x, 0.0, 1.0)[:, :, 16:48, 16:48])
@@ -82,7 +82,7 @@ def train_ae(model, sets, show=False):
     model.fit(input_train, output_train,
             shuffle=True,
             epochs=30,
-            batch_size=16,
+            batch_size=64,
             validation_data=(input_valid, output_valid),
             callbacks=[LambdaCallback(on_epoch_end=visualisation),
                        ModelCheckpoint(filepath="weights/auto_encoder/weights.{epoch:02d}-{val_loss:.2f}.hdf5", save_weights_only=True),
@@ -93,4 +93,4 @@ if __name__ == '__main__':
 
     model = model_autoencoder()
 
-    train_ae(model, get_dataset(60000, 10000))
+    train_ae(model, get_dataset(40000, 1000))
