@@ -91,6 +91,11 @@ def get_border(imgs):
     return result
 
 
+def get_center(imgs):
+    return imgs[:, :, 16:48, 16:48]
+
+
+
 def get_dataset(size_train, size_valid, size_test=100):
     train_imgs = load_data(0, size_train) / 255.
     valid_imgs = load_data(size_train, size_valid) / 255.

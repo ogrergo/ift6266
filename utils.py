@@ -1,9 +1,16 @@
+import os
+
+from PIL import Image
 from keras.engine.topology import InputSpec
 from keras.layers.convolutional import Conv2DTranspose, Conv2D, UpSampling2D
 from keras.layers.core import Activation, Dense
 from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import MaxPooling2D
 import keras.backend as K
+import numpy as np
+
+from dataset import save_image
+
 
 def conv_layer(_latent, previous_layer, activation='relu', batch_norm=True, deconv=False):
     _out = previous_layer
@@ -14,7 +21,7 @@ def conv_layer(_latent, previous_layer, activation='relu', batch_norm=True, deco
     else:
         M = Conv2D
 
-    _out = M(_latent, (3, 3), padding="same", data_format="channels_first", use_bias=not batch_norm)(_out)
+    _out = M(_latent, kernel_size=3, padding="same", data_format="channels_first", use_bias=not batch_norm)(_out)
 
     if batch_norm:
         _out = BatchNormalization()(_out)
@@ -61,3 +68,25 @@ class DenseTied(Dense):
             self.bias = None
         self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
         self.built = True
+
+
+def test_model(name, imgs, epoch, model, save=True, show=True):
+    size = imgs[0].shape[2]
+
+    result = [(model.predict(np.expand_dims(e, axis=0)).transpose((0, 2, 3, 1)).squeeze(axis=0) * 255).astype('uint8') for
+              e in imgs]
+
+    rows = len(imgs) // 10
+    img = np.zeros(shape=(size * 10, size * rows, 3), dtype='uint8')
+    index = lambda i: ((i % 10) * size, (i // 10) * size)
+
+    for i, r in enumerate(result):
+        x, y = index(i)
+        img[x:(size + x), y:(size + y), :] = result[i]
+
+    if show:
+        Image.fromarray(img).show()
+
+    if save:
+        save_image(name, "epoch_%d" % epoch, img)
+

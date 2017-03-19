@@ -93,4 +93,4 @@ if __name__ == '__main__':
 
     model = model_autoencoder()
 
-    train_ae(model, get_dataset(3000, 1000))
+    train_ae(model, get_dataset(60000, 10000))
