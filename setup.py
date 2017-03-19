@@ -22,7 +22,7 @@ def install_dataset():
     if not os.path.isdir(os.path.join(DATASET_FOLDER, 'inpainting')):
         print("Extracting dataset ...")
         os.chdir(DATASET_FOLDER)
-        call(["tar", "xjvf", DATASET_FILE])
+        call(["tar", "xjf", DATASET_FILE])
 
     print("Done.")
 
