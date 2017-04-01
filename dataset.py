@@ -58,6 +58,9 @@ def resize_mscoco():
 
 def load_data(start, n):
 
+    if n <= 0:
+        return
+
     mscoco = "dataset/inpainting"
     split = "train2014"
     caption_path = "dict_key_imgID_value_caps_train_and_valid.pkl"
@@ -96,12 +99,16 @@ def get_center(imgs):
 
 
 
-def get_dataset(size_train, size_valid, size_test=100):
-    train_imgs = load_data(0, size_train) / 255.
-    valid_imgs = load_data(size_train, size_valid) / 255.
+def get_dataset(size_train, size_valid, size_test=100, min=0., max=1.):
+    scale = lambda i: (i/255.) * (max - min) + min
+
+    train_imgs = scale(load_data(0, size_train)) if size_train > 0 else None
+    valid_imgs = scale(load_data(size_train, size_valid)) if size_valid > 0 else None
+
 
     test_imgs = np.concatenate((train_imgs[0:size_test//2],
-                                load_data(size_train + size_valid, size_test - size_test//2) / 255.), axis=0)
+                                scale(load_data(size_train + size_valid, size_test - size_test//2))), axis=0) if size_test > 0 else None
+
 
     return (train_imgs, valid_imgs, test_imgs)
 
