@@ -116,7 +116,7 @@ class Model():
         self.d_logits_sum = histogram_summary("d_logits", self.D_logits)
         self.d_logits_sampler_sum = histogram_summary("d_logits_sampler", self.D_logits_sample)
 
-        self.G_sum = image_summary("G", self.G)
+        self.G_sum = image_summary("G", self.G, max_outputs=10)
 
         self.saver = tf.train.Saver()
 
@@ -266,7 +266,7 @@ class Model():
 
         sample_z = np.random.uniform(-1, 1, size=(FLAGS.batch_size, FLAGS.z_dim))
 
-        sample_inputs = load_images(data[0:FLAGS.batch_size])
+        sample_inputs = load_images(data[0:FLAGS.batch_size], middle=False)
 
         counter = 1
         start_time = time.time()
