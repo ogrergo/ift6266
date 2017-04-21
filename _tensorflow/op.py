@@ -12,10 +12,9 @@ def conv_out_size_same(size, stride):
 
 def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=False):
     shape = input_.get_shape().as_list()
-    print(shape)
     with tf.variable_scope(scope or "Linear"):
         matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
-        tf.random_normal_initializer(stddev=stddev, dtype=dtypes.float32))
+            tf.random_normal_initializer(stddev=stddev, dtype=dtypes.float32))
         bias = tf.get_variable("bias", [output_size],
         initializer=tf.constant_initializer(bias_start))
         if with_w:
@@ -33,6 +32,13 @@ def conv2d(input_, output_dim, k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, name="co
         conv = tf.reshape(tf.nn.bias_add(conv, biases), tf.shape(conv))
 
         return conv
+
+def avg_pooling(input_, output_size):
+    shape = input_.shape
+    k = int(shape[1]) / output_size
+    assert (int(k) == k, "shape of input must be a multiple of output size")
+    k = int(k)
+    return tf.nn.avg_pool(input_, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
 
 
 def deconv2d(input_, output_shape,
@@ -77,7 +83,7 @@ class batch_norm(object):
                       scope=self.name)
 
 def concat(tensors, axis, *args, **kwargs):
-    return tf.concat_v2(tensors, axis, *args, **kwargs)
+    return tf.concat(tensors, axis, *args, **kwargs)
 
 
 image_summary = tf.summary.image

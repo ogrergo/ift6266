@@ -12,9 +12,16 @@ data_path = os.path.join(mscoco, split)
 caption_path = os.path.join(mscoco, caption_path)
 
 
-def load_images(filelist):
+def load_images(filelist, middle=True):
     sample = [np.array(Image.open(sample_file)) for sample_file in filelist]
-    return np.array(sample).astype(np.float32)
+    batch = np.array(sample).astype(np.float32)
+    if middle:
+        m = batch.shape[1] // 2
+        batch = batch[:, m-16:m+16, m-16:m+16, :]
+        assert (batch.shape[1] == 32 and batch.shape[2] == 32)
+        # Image.fromarray(batch[0,:,:].astype(np.uint8)).show()
+
+    return (2.* batch)/255. - 1.
 
 def get_dataset_files():
     return  glob.glob(data_path + "/*.jpg")
