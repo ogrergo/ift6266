@@ -1,2 +1,5 @@
 dataset/*
 models/*
+_tensorflow/checkpoint
+_tensorflow/logs
+_tensorflow/samples

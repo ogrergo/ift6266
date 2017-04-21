@@ -8,6 +8,7 @@ from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import MaxPooling2D
 import keras.backend as K
 import numpy as np
+from progressbar.widgets import FormatWidgetMixin, WidthWidgetMixin
 
 from dataset import save_image
 
@@ -90,3 +91,20 @@ def test_model(name, imgs, epoch, model, save=True, show=True):
     if save:
         save_image(name, "epoch_%d" % epoch, img)
 
+
+
+class TextBar(FormatWidgetMixin, WidthWidgetMixin):
+    mapping = {}
+
+    def __init__(self, format, mapping=mapping, **kwargs):
+        self.format = format
+        self.mapping = mapping
+        FormatWidgetMixin.__init__(self, format=format, **kwargs)
+        WidthWidgetMixin.__init__(self, **kwargs)
+
+    def update_mapping(self, mapping):
+        self.mapping = mapping
+
+    def __call__(self, progress, data, format=None):
+        return FormatWidgetMixin.__call__(self, progress, self.mapping,
+                                          self.format)
