@@ -7,11 +7,10 @@ import time
 
 from dask.array.chunk import mean
 
-from _tensorflow.op import *
+from op import *
 
-from _tensorflow.utils import load_images, get_dataset_files
-from _tensorflow.utils_old import save_images
-from ops import conv_cond_concat
+from utils import load_images, get_dataset_files
+from utils_old import save_images
 
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 25, "Epoch to train")
