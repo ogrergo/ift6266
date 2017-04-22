@@ -173,6 +173,8 @@ def save_image(model_name, image_name, img):
 
 
 
+
+
 if __name__ == '__main__':
     #resize_mscoco()
     train_set = load_data(0, 1000)
