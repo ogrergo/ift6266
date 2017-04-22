@@ -16,6 +16,8 @@ import PIL.Image as Image
 
 
 # all(len(d.shape) == 3 for d in data)
+
+
 caption_path = "dict_key_imgID_value_caps_train_and_valid.pkl"
 import pickle as pkl
 
