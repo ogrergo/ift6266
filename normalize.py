@@ -3,8 +3,8 @@ import os
 import numpy as np
 import PIL.Image as Image
 
-data = glob(os.path.join("./data", "ift", "*.jpg"))
-
+data = glob(os.path.join("dataset", "inpainting/train2014", "*.jpg"))
+print("check dataset [%d jpg]"%len(data))
 for d in data:
     img = np.array(Image.open(d))
     if img.shape != (64, 64, 3):
