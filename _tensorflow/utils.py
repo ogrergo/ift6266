@@ -3,7 +3,7 @@ import pickle as pkl
 import glob
 import numpy as np
 import PIL.Image as Image
-import pickle
+
 
 from urllib.request import urlopen
 
@@ -73,17 +73,31 @@ def load_embeddings_data():
         embeddings = np.load(embeddings_file)
 
     if sentence_mapping is None:
-        sentence_mapping = pickle.load(sentence_mapping_file)
+        with open(sentence_mapping_file, 'rb') as fd:
+            sentence_mapping = pkl.load(fd)
 
 
 def get_embeddings(filelist=None, batch_size=None):
     load_embeddings_data()
 
     if filelist:
-        sentences = [embeddings[sentence_mapping[np.random.choice(caption_dict[f])]] for f in filelist]
+        sentences = []
+        for f in filelist:
+            keys = caption_dict[os.path.basename(f)[0:-4]]
+            np.random.shuffle(keys)
+            for k in keys:
+                try:
+                    s = sentence_mapping[k]
+                    break
+                except KeyError:
+                    continue
+            if s == None:
+                sentences.append(np.zeros((1024,), dtype=np.float32))
+            else:
+                sentences.append(embeddings[s])
     else:
-        nb_images = embeddings.shape()[0]
-        sentences = [embeddings[np.random.randint(nb_images),0] for _ in range(batch_size)]
+        nb_images = embeddings.shape[0]
+        sentences = np.array( [embeddings[np.random.randint(nb_images)] for _ in range(batch_size)])
     return sentences
 
 

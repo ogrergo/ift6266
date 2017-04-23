@@ -9,11 +9,11 @@ from dask.array.chunk import mean
 
 from op import *
 
-from utils import load_images, get_dataset_files
+from utils import *
 from utils_old import save_images
 
 flags = tf.app.flags
-flags.DEFINE_integer("epoch", 25, "Epoch to train")
+flags.DEFINE_integer("epoch", 100, "Epoch to train")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam")
 flags.DEFINE_integer("train_size", np.inf, "The size of train images")
@@ -27,7 +27,7 @@ flags.DEFINE_integer("border_dim", 100, "Dimension of the border condition noise
 
 flags.DEFINE_integer("nb_fc", 2048, "1st layer of fully connected in generator.")
 flags.DEFINE_integer("nb_filters_g", 128, "Number of filter in the last layer of generator")
-flags.DEFINE_integer("nb_filters_d", 64, "Number of filter in the 1st layer of discriminator")
+flags.DEFINE_integer("nb_filters_d", 128, "Number of filter in the 1st layer of discriminator")
 
 flags.DEFINE_string("dataset", "ift_image_only", "The name of dataset")
 flags.DEFINE_string("input_fname_pattern", "*.jpg", "Glob pattern of filename of input images")
@@ -115,6 +115,8 @@ class Model():
 
         self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
         self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
+        self.d_loss_fake_captions_sum = scalar_summary("d_loss_fake_captions", self.d_loss_real_wrong_caption)
+            
 
         self.d_loss = self.d_loss_real + self.d_loss_fake + self.d_loss_real_wrong_caption
 
@@ -178,22 +180,24 @@ class Model():
                 ## build conv network
 
                 b0 = avg_pooling(tf.nn.relu(self.g_bn3(
-                    conv2d(border, FLAGS.nb_filters_g//4, name="g_b0_conv"), train=train)), s_h2)
+                    conv2d(border, FLAGS.nb_filters_g//2, name="g_b0_conv"), train=train)), s_h2)
 
                 b1 = avg_pooling(tf.nn.relu(self.g_bn4(
-                    conv2d(border, FLAGS.nb_filters_g//2, name="g_b1_conv"), train=train)), s_h4)
+                    conv2d(b0, FLAGS.nb_filters_g, name="g_b1_conv"), train=train)), s_h4)
 
-                y = linear(tf.reshape(b1, [FLAGS.batch_size, s_h4 * s_w4 * FLAGS.nb_filters_g//2]), 100, "g_border_lin")
+                y = linear(tf.reshape(b1, [FLAGS.batch_size, s_h4 * s_w4 * FLAGS.nb_filters_g]), 100, "g_border_lin")
 
-                y_emb = linear(embeddings, 100, "g_project_emb")
+                y_emb = linear(embeddings, 300, "g_project_emb")
 
                 z = concat([z, y, y_emb], 1)
 
                 h0 = tf.nn.relu(self.g_bn0(linear(z, FLAGS.nb_fc, 'g_h0_lin'), train=train))
-                h0 = concat([h0, tf.nn.relu(y)], 1)
+                h0 = concat([h0, tf.nn.relu(y), y_emb], 1)
 
                 h1 = tf.nn.relu(self.g_bn1(linear(h0, FLAGS.nb_filters_g * 2 * s_h4 * s_w4, 'g_h1_lin'), train=train))
-                h1 = tf.reshape(h1, [FLAGS.batch_size, s_h4, s_w4, FLAGS.nb_filters_g * 2])
+                
+                s = int(h1.get_shape()[1]) // (s_h4**2)
+                h1 = tf.reshape(h1, [FLAGS.batch_size, s_h4, s_w4, s])
 
                 h1 = concat([h1, b1], 3)
 
@@ -286,7 +290,7 @@ class Model():
         self.g_sum = merge_summary([self.z_sum, self.d__sum,
                                     self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
 
-        self.d_sum = merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
+        self.d_sum = merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum, self.d_loss_fake_captions_sum])
 
         self.writer = SummaryWriter("./logs", self.session.graph)
 
