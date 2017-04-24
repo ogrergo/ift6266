@@ -45,7 +45,8 @@ def save_as_dataset(filelist, caption_dict, embeddings, word_dict, nb_per_file=1
 
         assert captions_embeddings.shape[1] == 1024
 
-        image = (np.array(Image.open(f)).astype(np.float32) / 255.) * 2. - 1.
+        #image = (np.array(Image.open(f)).astype(np.float32) / 255.) * 2. - 1.
+        image = np.array(Image.open(f)).astype(np.uint8) #.astype(np.float32) / 255.) * 2. - 1.
 
         example = tf.train.Example(
             features=tf.train.Features(
@@ -77,4 +78,4 @@ if __name__ == '__main__':
     print(" [*] Loading embeddings data")
     ut.load_embeddings_data()
 
-    save_as_dataset(ut.get_dataset_files(add_valid=True), ut.caption_dict, ut.embeddings, ut.sentence_mapping)
+    save_as_dataset(ut.get_dataset_files(add_valid=True), ut.caption_dict, ut.embeddings, ut.sentence_mapping, nb_per_file=4096)
