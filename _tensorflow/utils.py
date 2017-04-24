@@ -103,8 +103,13 @@ def get_embeddings(filelist=None, batch_size=None):
 
     # return np.zeros((len(filelist) if filelist is not None else batch_size, 1024))
 
-def get_dataset_files():
-    return glob.glob(os.path.join(train_images, "*.jpg"))
+def get_dataset_files(add_valid=False):
+    result = glob.glob(os.path.join(train_images, "*.jpg"))
+
+    if add_valid:
+        result.extend(glob.glob(os.path.join(valid_images, "*.jpg")))
+
+    return result
 
 
 # def load_data(start, n):
