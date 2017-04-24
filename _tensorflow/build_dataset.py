@@ -13,15 +13,18 @@ def _int64_feature(value):
 def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
-def save_as_dataset(filelist, caption_dict, embeddings, word_dict, nb_per_file=1024, start=0):
-    print(" [*] Creating serialized dataset of size %d"%nb_per_file)
+def save_as_dataset(filelist, caption_dict, embeddings, word_dict, nb_per_file=1024, start_index=0, dataset_dir="dataset"):
+    if not os.path.isdir(dataset_dir):
+        os.mkdir(dataset_dir)
+
+    print(" [*] Creating serialized dataset (%d) in %d examples files."%(len(filelist), nb_per_file))
 
     def _get_tfrecord_writer(index):
-        name = os.path.join("dataset", 'image_captions_embeddings.%d.tfrecords' % index)
+        name = os.path.join(dataset_dir, 'image_captions_embeddings.%d.tfrecords' % index)
         print("\n [*] Writing %s"%name)
         return tf.python_io.TFRecordWriter(name)
 
-    index_file = start
+    index_file = start_index
     index_example = 0
     writer = _get_tfrecord_writer(index_file)
 
@@ -68,7 +71,8 @@ def save_as_dataset(filelist, caption_dict, embeddings, word_dict, nb_per_file=1
 
 if __name__ == '__main__':
 
-    import _tensorflow.utils as ut
+    import utils as ut
+    import os
 
     print(" [*] Loading embeddings data")
     ut.load_embeddings_data()
