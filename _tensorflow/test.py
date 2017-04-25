@@ -59,6 +59,8 @@ class Model():
         # if not self.y_dim:
         self.g_bn3 = batch_norm(name='g_bn3')
         self.g_bn4 = batch_norm(name='g_bn4')
+        self.g_bn5 = batch_norm(name='g_bn5')
+
 
         self.build_model()
 
@@ -195,20 +197,21 @@ class Model():
 
                 ## build conv network
 
-                b0 = avg_pooling(tf.nn.relu(self.g_bn3(
+                b0 = max_pooling(tf.nn.relu(self.g_bn3(
                     conv2d(border, FLAGS.nb_filters_g//2, name="g_b0_conv"), train=train)), s_h2)
 
-                b1 = avg_pooling(tf.nn.relu(self.g_bn4(
+                b1 = max_pooling(tf.nn.relu(self.g_bn4(
                     conv2d(b0, FLAGS.nb_filters_g, name="g_b1_conv"), train=train)), s_h4)
 
-                y = linear(tf.reshape(b1, [FLAGS.batch_size, s_h4 * s_w4 * FLAGS.nb_filters_g]), 100, "g_border_lin")
+                y = tf.nn.relu(self.g_bn5(linear(
+                    tf.reshape(b1, [FLAGS.batch_size, s_h4 * s_w4 * FLAGS.nb_filters_g]), 100, "g_border_lin")))
 
                 y_emb = linear(embeddings, 300, "g_project_emb")
 
-                z = concat([z, y, y_emb], 1)
+                z = concat([z, y_emb], 1)
 
                 h0 = tf.nn.relu(self.g_bn0(linear(z, FLAGS.nb_fc, 'g_h0_lin'), train=train))
-                h0 = concat([h0, tf.nn.relu(y), y_emb], 1)
+                h0 = concat([h0, y, y_emb], 1)
 
                 h1 = tf.nn.relu(self.g_bn1(linear(h0, FLAGS.nb_filters_g * 2 * s_h4 * s_w4, 'g_h1_lin'), train=train))
                 

@@ -33,12 +33,12 @@ def conv2d(input_, output_dim, k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, name="co
 
         return conv
 
-def avg_pooling(input_, output_size):
+def max_pooling(input_, output_size):
     shape = input_.shape
     k = int(shape[1]) / output_size
     assert (int(k) == k, "shape of input must be a multiple of output size")
     k = int(k)
-    return tf.nn.avg_pool(input_, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
+    return tf.nn.max_pool(input_, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
 
 
 def deconv2d(input_, output_shape,
