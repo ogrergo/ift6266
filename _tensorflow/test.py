@@ -68,7 +68,8 @@ class Model():
         ## build cGAN model
         # self.y = tf.placeholder(tf.float32, [None, FLAGS.y_dim], name='y')
 
-        filenames = get_processed_dataset_files()
+        filenames = sorted(get_processed_dataset_files())[:-1]
+
         image_batch, captions_batch, captions_fake_batch, z_batch = input_pipeline(filenames=filenames,
                                                                                   batch_size=FLAGS.batch_size,
                                                                                   read_threads=FLAGS.read_threads,
