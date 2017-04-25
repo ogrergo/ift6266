@@ -171,7 +171,7 @@ def input_pipeline(filenames, batch_size, read_threads, num_epochs=None, z_dim=1
         min_after_dequeue=min_after_dequeue)
 
     return image_batch, captions_batch, \
-           tf.random_normal(stddev=0.04, shape=(batch_size, embedding_size)), tf.random_normal(shape=(batch_size, z_dim))
+           tf.random_normal(stddev=0.02, shape=(batch_size, embedding_size)), tf.random_normal(shape=(batch_size, z_dim))
 
 # def load_data(start, n):
 #     with open(caption_path, 'rb') as fd:

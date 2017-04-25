@@ -291,7 +291,6 @@ class Model():
             return False, 0
 
     def train(self):
-
         d_optim = tf.train.AdamOptimizer(FLAGS.learning_rate, beta1=FLAGS.beta1) \
             .minimize(self.d_loss, var_list=self.d_vars)
 
