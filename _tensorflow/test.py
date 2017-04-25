@@ -10,7 +10,7 @@ from dask.array.chunk import mean
 from op import *
 
 from utils import *
-from utils_old import save_images
+# from utils_old import save_images
 
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 100, "Epoch to train")
@@ -20,6 +20,7 @@ flags.DEFINE_integer("train_size", np.inf, "The size of train images")
 flags.DEFINE_integer("batch_size", 64, "The size of batch images")
 flags.DEFINE_integer("output_size", 32, "The size of the output images to produce")
 flags.DEFINE_integer("input_size", 64, "The size of the input images")
+
 
 flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
 flags.DEFINE_integer("z_dim", 100, "Dimension of noise")
@@ -35,7 +36,7 @@ flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the 
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples")
 
 flags.DEFINE_string("model_type", "dcgan", "model type")
-
+flags.DEFINE_integer("read_threads", 8, "number of thread to read the batchs.")
 
 flags.DEFINE_boolean("is_train", True, "True for training, False for testing")
 flags.DEFINE_boolean("visualize", True, "True for visualizing, False for nothing")
@@ -64,26 +65,42 @@ class Model():
     def build_model(self):
         ## build cGAN model
         # self.y = tf.placeholder(tf.float32, [None, FLAGS.y_dim], name='y')
-        self.z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
+
+        filenames = get_processed_dataset_files()
+        image_batch, captions_batch, captions_fake_batch, z_batch = input_pipeline(filenames=filenames,
+                                                                                  batch_size=FLAGS.batch_size,
+                                                                                  read_threads=FLAGS.read_threads,
+                                                                                  z_dim=FLAGS.z_dim)
+
+        self.z = z_batch
+        self.input_true = image_batch
+        self.embeddings_real = captions_batch#tf.placeholder(tf.float32, [None, 1024], name="embeddings")
+        self.embeddings_fake = captions_fake_batch#tf.placeholder(tf.float32, [None, 1024], name="embeddings")
+        # self.input_true = tf.placeholder(tf.float32,
+        #     [None, FLAGS.input_size, FLAGS.input_size, FLAGS.c_dim],
+        #     name="input_true")
+
+        # self.z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
+
         self.z_sum = histogram_summary("z", self.z)
+        self.embeddings_real_sum = histogram_summary("emb", self.embeddings_real)
+        self.embeddings_fake_sum = histogram_summary("emb_fake", self.embeddings_fake)
 
-        self.input_true = tf.placeholder(tf.float32,
-            [None, FLAGS.input_size, FLAGS.input_size, FLAGS.c_dim],
-            name="input_true")
 
-        self.embeddings_real = tf.placeholder(tf.float32, [None, 1024], name="embeddings")
-        self.embeddings_fake = tf.placeholder(tf.float32, [None, 1024], name="embeddings")
 
+        print(image_batch.get_shape())
+        print(captions_batch.get_shape())
+        print(captions_fake_batch.get_shape())
+        print(z_batch.get_shape())
+
+        # mask center of image
         mask = np.ones((FLAGS.batch_size, 64, 64, 3), dtype='float32')
         mask[:, 16:48, 16:48, :] = 0
-
         self.input_border = tf.multiply(self.input_true, tf.constant(mask, name="center_mask"))
 
-        # input_sample = tf.placeholder(tf.float32,
-        #     [None, FLAGS.input_size, FLAGS.input_size, FLAGS.c_dim],
-        #     name="input_sample")
 
         self.G = self.generator(self.z, border=self.input_border, embeddings=self.embeddings_real)
+
         self.G_sampler = self.generator(self.z, reuse=True, border=self.input_border, embeddings=self.embeddings_real)
 
         self.D, self.D_logits = self.discriminator(self.input_true, reuse=False,
@@ -158,7 +175,6 @@ class Model():
             r = tf.concat([r, embeddings], 1)
 
             h4 = tf.reshape(linear(r, 1, 'd_h3_lin'), [-1])
-            tf.assert_equal(tf.shape(h4), (FLAGS.batch_size,))
 
             return tf.nn.sigmoid(h4), h4
 
@@ -272,11 +288,6 @@ class Model():
             return False, 0
 
     def train(self):
-        """Train DCGAN"""
-
-        print(" [*] Loading dataset")
-        data = get_dataset_files()
-        # np.random.shuffle(data)
 
         d_optim = tf.train.AdamOptimizer(FLAGS.learning_rate, beta1=FLAGS.beta1) \
             .minimize(self.d_loss, var_list=self.d_vars)
@@ -284,23 +295,21 @@ class Model():
         g_optim = tf.train.AdamOptimizer(FLAGS.learning_rate, beta1=FLAGS.beta1) \
             .minimize(self.g_loss, var_list=self.g_vars)
 
+        self.session.run(tf.global_variables_initializer())
 
-        tf.global_variables_initializer().run()
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=self.session, coord=coord)
 
         self.g_sum = merge_summary([self.z_sum, self.d__sum,
-                                    self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
+                                    self.G_sum, self.d_loss_fake_sum, self.g_loss_sum,
+                                    self.embeddings_fake_sum, self.embeddings_real_sum])
 
-        self.d_sum = merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum, self.d_loss_fake_captions_sum])
+        self.d_sum = merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum,
+                                    self.d_loss_sum, self.d_loss_fake_captions_sum])
 
         self.writer = SummaryWriter("./logs", self.session.graph)
 
-        sample_z = np.random.uniform(-1, 1, size=(FLAGS.batch_size, FLAGS.z_dim))
-
-        sample_inputs = load_images(data[0:FLAGS.batch_size], middle=False)
-        sample_emb = get_embeddings(data[0:FLAGS.batch_size])
-
         counter = 1
-        start_time = time.time()
         could_load, checkpoint_counter = self.load(FLAGS.checkpoint_dir)
         if could_load:
             counter = checkpoint_counter
@@ -308,80 +317,62 @@ class Model():
         else:
             print(" [!] Load failed...")
 
-        for epoch in range(FLAGS.epoch):
-            data = get_dataset_files()
-
-            batch_idxs = min(len(data), FLAGS.train_size) // FLAGS.batch_size
-
-            for idx in range(0, batch_idxs):
-                batch_files = data[idx * FLAGS.batch_size:(idx + 1) * FLAGS.batch_size]
-                batch = load_images(batch_files, middle=False)
-
-                batch_z = np.random.uniform(-1, 1, [FLAGS.batch_size, FLAGS.z_dim]).astype(np.float32)
-
-                batch_emb = get_embeddings(filelist=batch_files)
-                batch_emb_fake = get_embeddings(batch_size=FLAGS.batch_size)
+        try:
+            while not coord.should_stop():
 
                 # Update D network
-                _, summary_str = self.session.run([d_optim, self.d_sum],
-                                               feed_dict={self.input_true: batch,
-                                                          self.z: batch_z,
-                                                          self.embeddings_real: batch_emb,
-                                                          self.embeddings_fake: batch_emb_fake})
+                _, summary_str = self.session.run([d_optim, self.d_sum])
+                                               #    ,
+                                               # feed_dict={self.input_true: batch,
+                                               #            self.z: batch_z,
+                                               #            self.embeddings_real: batch_emb,
+                                               #            self.embeddings_fake: batch_emb_fake})
                 self.writer.add_summary(summary_str, counter)
 
                 # Update G network
-                _, summary_str = self.session.run([g_optim, self.g_sum],
-                                               feed_dict={self.input_true: batch,
-                                                          self.z: batch_z,
-                                                          self.embeddings_real:batch_emb})
+                _, summary_str = self.session.run([g_optim, self.g_sum],)
+                                               # feed_dict={self.input_true: batch,
+                                               #            self.z: batch_z,
+                                               #            self.embeddings_real:batch_emb})
                 self.writer.add_summary(summary_str, counter)
 
                 # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-                _, summary_str = self.session.run([g_optim, self.g_sum],
-                                               feed_dict={self.input_true: batch,
-                                                          self.z: batch_z,
-                                                          self.embeddings_real:batch_emb})
+                _, summary_str = self.session.run([g_optim, self.g_sum],)
+                                               # feed_dict={self.input_true: batch,
+                                               #            self.z: batch_z,
+                                               #            self.embeddings_real:batch_emb})
                 self.writer.add_summary(summary_str, counter)
 
-                errD_fake = self.d_loss_fake.eval({self.input_true: batch,
-                                                   self.z: batch_z,
-                                                   self.embeddings_real:batch_emb})
-
-                errD_real = self.d_loss_real.eval({self.input_true: batch,
-                                                   self.embeddings_real:batch_emb})
-
-                errD_real_fake_caption = self.d_loss_real_wrong_caption.eval({
-                    self.input_true: batch,
-                    self.embeddings_fake: batch_emb_fake
-                })
-
-                errG = self.g_loss.eval({self.input_true: batch,
-                                         self.z: batch_z,
-                                         self.embeddings_real:batch_emb})
 
                 counter += 1
-                print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
-                      % (epoch, idx, batch_idxs,
-                         time.time() - start_time, errD_fake + errD_real + errD_real_fake_caption, errG))
 
-                if np.mod(counter, 100) == 1:
-                    try:
-                        samples, d_loss, g_loss = self.session.run(
-                            [self.G_sampler, self.d_loss, self.g_loss],
-                            feed_dict={
-                                self.z: sample_z,
-                                self.input_true: sample_inputs,
-                                self.embeddings_real: sample_emb
-                            },
-                        )
-                        manifold_h = int(np.ceil(np.sqrt(samples.shape[0])))
-                        manifold_w = int(np.floor(np.sqrt(samples.shape[0])))
-                        save_images(samples, [manifold_h, manifold_w],
-                                    './{}/train_{:02d}_{:04d}.png'.format(FLAGS.sample_dir, epoch, idx))
-                        print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
-                    except:
-                        print("one pic error!...")
+                # if np.mod(counter, 2) == 1:
+                #     try:
+                #         samples, d_loss, g_loss = self.session.run(
+                #             [self.G_sampler, self.d_loss, self.g_loss],
+                #             feed_dict={
+                #                 self.z: sample_z,
+                #                 self.input_true: sample_inputs,
+                #                 self.embeddings_real: sample_emb
+                #             },
+                #         )
+                #
+                #         manifold_h = int(np.ceil(np.sqrt(samples.shape[0])))
+                #         manifold_w = int(np.floor(np.sqrt(samples.shape[0])))
+                #         save_images(samples, [manifold_h, manifold_w],
+                #                     './{}/train_{:02d}_{:04d}.png'.format(FLAGS.sample_dir, epoch, idx))
+                #         print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
+                #     except:
+                #         print("one pic error!...")
 
+                print("counter %d"%counter)
                 if np.mod(counter, 500) == 2:
                     self.save(FLAGS.checkpoint_dir, counter)
+
+        except tf.errors.OutOfRangeError:
+            print('Done training -- epoch limit reached')
+        finally:
+            coord.request_stop()
+
+        # Wait for threads to finish.
+        coord.join(threads)

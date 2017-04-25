@@ -4,7 +4,7 @@ import glob
 import numpy as np
 import PIL.Image as Image
 
-
+import tensorflow as tf
 from urllib.request import urlopen
 
 dataset = "../dataset"
@@ -17,6 +17,9 @@ caption_path = os.path.join(mscoco, "dict_key_imgID_value_caps_train_and_valid.p
 embeddings_folder = os.path.join(dataset, 'embeddings')
 embeddings_file = os.path.join(embeddings_folder, "embeddings.npy")
 sentence_mapping_file = os.path.join(embeddings_folder, "embeddings_mapping.pkl")
+
+processed_dataset_folder = 'dataset'
+processed_dataset_files = os.path.join(processed_dataset_folder, "image_captions_embeddings.*.tfrecords")
 
 def download_embeddings():
 
@@ -111,6 +114,64 @@ def get_dataset_files(add_valid=False):
 
     return result
 
+
+def get_processed_dataset_files():
+    return glob.glob(processed_dataset_files)
+
+def _preprocess_image(image):
+    return (tf.cast(image, tf.float32) / 255.) * 2. - 1.
+
+
+def _preprocess_embeddings(embeddings, nb_embeddings):
+
+    # random linear combo of embeddings
+    combo = tf.random_uniform([nb_embeddings], minval=0, maxval=1)
+    combo = combo / tf.reduce_sum(combo)
+
+    k = tf.reduce_sum(tf.transpose(embeddings) * combo, 1)
+    # print(k.get_shape())
+    return k
+
+
+def decode_example_record(filename_queue):
+
+    reader = tf.TFRecordReader()
+    _, serialized_example = reader.read(filename_queue)
+
+    features = tf.parse_single_example(
+        serialized_example,
+        features={
+            'embeddings': tf.FixedLenFeature([], tf.string),
+            'embeddings_len': tf.FixedLenFeature([], tf.int64),
+            'image': tf.FixedLenFeature([], tf.string)
+        })
+
+    image = tf.decode_raw(features['image'], tf.uint8)
+    image = tf.reshape(image, [64, 64, 3])
+
+    embeddings_len = tf.cast(features['embeddings_len'], tf.int32)
+
+    embeddings = tf.decode_raw(features['embeddings'], tf.float32)
+    embeddings = tf.reshape(embeddings, [embeddings_len, 1024])
+
+    return _preprocess_image(image), _preprocess_embeddings(embeddings, embeddings_len)
+
+
+def input_pipeline(filenames, batch_size, read_threads, num_epochs=None, z_dim=100, embedding_size=1024):
+    filename_queue = tf.train.string_input_producer(filenames, num_epochs=num_epochs, shuffle=True)
+
+    example_list = [decode_example_record(filename_queue) for _ in range(read_threads)]
+    # example_fake_captions = [decode_example_record(filename_queue) for _ in range(read_threads)]
+
+    min_after_dequeue = 10000
+    capacity = min_after_dequeue + 3 * batch_size
+
+    image_batch, captions_batch = tf.train.shuffle_batch_join(
+        example_list, batch_size=batch_size, capacity=capacity,
+        min_after_dequeue=min_after_dequeue)
+
+    return image_batch, captions_batch, \
+           tf.random_normal(shape=(batch_size, embedding_size)), tf.random_normal(shape=(batch_size, z_dim))
 
 # def load_data(start, n):
 #     with open(caption_path, 'rb') as fd:

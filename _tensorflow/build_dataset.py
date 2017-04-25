@@ -48,6 +48,10 @@ def save_as_dataset(filelist, caption_dict, embeddings, word_dict, nb_per_file=1
         #image = (np.array(Image.open(f)).astype(np.float32) / 255.) * 2. - 1.
         image = np.array(Image.open(f)).astype(np.uint8) #.astype(np.float32) / 255.) * 2. - 1.
 
+        if image.shape != (64, 64, 3):
+            print("Image with incompatible shape !")
+            image = np.repeat(image[:,:, None], 3, axis=2)
+
         example = tf.train.Example(
             features=tf.train.Features(
                 feature={
