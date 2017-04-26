@@ -1,5 +1,6 @@
 dataset/*
 models/*
+keras_models/output
 _tensorflow/checkpoint
 _tensorflow/logs
 _tensorflow/samples
