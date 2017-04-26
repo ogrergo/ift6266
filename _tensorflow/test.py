@@ -212,7 +212,7 @@ class Model():
                 z = concat([z, y_emb], 1)
 
                 h0 = tf.nn.relu(self.g_bn0(linear(z, FLAGS.nb_fc, 'g_h0_lin'), train=train))
-                h0 = concat([h0, y, y_emb], 1)
+                h0 = concat([h0, y], 1)
 
                 h1 = tf.nn.relu(self.g_bn1(linear(h0, FLAGS.nb_filters_g * 2 * s_h4 * s_w4, 'g_h1_lin'), train=train))
                 

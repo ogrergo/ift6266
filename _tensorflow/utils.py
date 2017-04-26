@@ -154,17 +154,28 @@ def decode_example_record(filename_queue):
     embeddings = tf.decode_raw(features['embeddings'], tf.float32)
     embeddings = tf.reshape(embeddings, [embeddings_len, 1024])
 
-    return _preprocess_image(image), _preprocess_embeddings(embeddings, embeddings_len)
+    return _preprocess_image(image), \
+           _preprocess_embeddings(embeddings, embeddings_len), \
+           _preprocess_embeddings(embeddings, embeddings_len) # fake captions to be shuffled
+
+def _shuffle_queue(tensor, capacity, min_after_dequeue):
+    q = tf.RandomShuffleQueue(capacity, min_after_dequeue, tensor.get_shape())
+    tensor
+
+    tf.tuple((q.enqueue_many([tensor]))
 
 
-def input_pipeline(filenames, batch_size, read_threads, num_epochs=None, z_dim=100, embedding_size=1024):
+def input_pipeline(filenames, batch_size, read_threads, nb_repeat_exemples=1, num_epochs=None, z_dim=100, embedding_size=1024):
     filename_queue = tf.train.string_input_producer(filenames, num_epochs=num_epochs, shuffle=True)
-
-    example_list = [decode_example_record(filename_queue) for _ in range(read_threads)]
-    # example_fake_captions = [decode_example_record(filename_queue) for _ in range(read_threads)]
 
     min_after_dequeue = 10000
     capacity = min_after_dequeue + 3 * batch_size
+
+    example_list = []
+    for _ in range(read_threads):
+        img, emb0, emb1 = decode_example_record(filename_queue)
+        example_list += (img, emb0, _shuffle_queue(emb1, capacity=capacity))
+
 
     image_batch, captions_batch = tf.train.shuffle_batch_join(
         example_list, batch_size=batch_size, capacity=capacity,
