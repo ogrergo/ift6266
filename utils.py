@@ -115,8 +115,17 @@ def get_dataset_files(add_valid=False):
     return result
 
 
-def get_processed_dataset_files():
+def _get_processed_dataset_files():
     return glob.glob(processed_dataset_files)
+
+
+def get_train_dataset_filelist():
+    return sorted(_get_processed_dataset_files())[:-1]
+
+
+def get_valid_dataset_filelist():
+    return sorted(_get_processed_dataset_files())[-1]
+
 
 def _preprocess_image(image):
     return (tf.cast(image, tf.float32) / 255.) * 2. - 1.
@@ -158,49 +167,72 @@ def decode_example_record(filename_queue):
            _preprocess_embeddings(embeddings, embeddings_len), \
            _preprocess_embeddings(embeddings, embeddings_len) # fake captions to be shuffled
 
-def _shuffle_queue(tensor, capacity, min_after_dequeue):
-    q = tf.RandomShuffleQueue(capacity, min_after_dequeue, tensor.get_shape())
-    tensor
 
-    tf.tuple((q.enqueue_many([tensor]))
+def _shuffle_queue(tensor, capacity, min_after_dequeue):
+    queue = tf.RandomShuffleQueue(capacity, min_after_dequeue, tf.float32,
+                                  shapes=tensor.get_shape())
+    enqueue_op = queue.enqueue(tensor)
+    qr = tf.train.QueueRunner(queue, [enqueue_op])
+    tf.train.add_queue_runner(qr)
+
+    return queue.dequeue()
+
+
+def _repeat_queue(tensor_tuple, capacity, nb_repeat_exemples):
+
+    batch_queue = tf.FIFOQueue(capacity, [tf.float32]*len(tensor_tuple),
+                               shapes=[t.get_shape() for t in tensor_tuple])
+
+    to_enqueue = tuple(tf.tile(tf.expand_dims(t, 0), [nb_repeat_exemples] + [1] * len(t.get_shape())) for t in tensor_tuple)
+
+    enqueue_op = batch_queue.enqueue_many(to_enqueue)
+
+    qr = tf.train.QueueRunner(batch_queue, [enqueue_op])
+    tf.train.add_queue_runner(qr)
+
+    return batch_queue.dequeue()
 
 
 def input_pipeline(filenames, batch_size, read_threads, nb_repeat_exemples=1, num_epochs=None, z_dim=100, embedding_size=1024):
     filename_queue = tf.train.string_input_producer(filenames, num_epochs=num_epochs, shuffle=True)
 
-    min_after_dequeue = 10000
+    min_after_dequeue = 5000
     capacity = min_after_dequeue + 3 * batch_size
 
     example_list = []
     for _ in range(read_threads):
         img, emb0, emb1 = decode_example_record(filename_queue)
-        example_list += (img, emb0, _shuffle_queue(emb1, capacity=capacity))
+        example_list.append((img, emb0, _shuffle_queue(emb1, capacity, min_after_dequeue)))
 
 
-    image_batch, captions_batch = tf.train.shuffle_batch_join(
+    image_batch, captions_batch, fake_captions_batch = tf.train.shuffle_batch_join(
         example_list, batch_size=batch_size, capacity=capacity,
         min_after_dequeue=min_after_dequeue)
 
-    return image_batch, captions_batch, \
-           tf.random_normal(stddev=0.02, shape=(batch_size, embedding_size)), tf.random_normal(shape=(batch_size, z_dim))
+    step_batch = (image_batch, captions_batch, fake_captions_batch, tf.random_normal(shape=(batch_size, z_dim)))
 
-# def load_data(start, n):
-#     with open(caption_path, 'rb') as fd:
-#         caption_dict = pkl.load(fd)
-#         pass
-#
-#     print(data_path + "/*.jpg")
-#     imgs = glob.glob(data_path + "/*.jpg")
-#
-#     imgs = imgs[start: start + n]
-#     data = np.empty((n, 3, 64, 64), dtype='uint8')
-#
-#     for i, img_path in enumerate(imgs):
-#         __t = np.array(Image.open(img_path))
-#         if len(__t.shape) == 2:
-#             __t = np.repeat(__t[None, :, :], axis=0, repeats=3)
-#         else:
-#             __t = __t.transpose((2,0,1))
-#         data[i, :, :, :] = __t
-#
-#     return data
+    return _repeat_queue(step_batch, capacity // batch_size, nb_repeat_exemples)
+
+
+def get_exemple_from_filelist(filelist):
+    for f in filelist:
+        for str_record in tf.python_io.tf_record_iterator(f):
+            example = tf.train.Example()
+            example.ParseFromString(str_record)
+
+            image = example.features.feature['image'].bytes_list.value[0]
+            img = np.fromstring(image, dtype=np.uint8)
+            img = np.reshape(img, (64, 64, 3))
+
+            nb_emb = int(example.features.feature['embeddings_len'].int64_list.value[0])
+
+            embs = example.features.feature['embeddings'].bytes_list.value[0]
+            embs = np.fromstring(embs, dtype=np.uint8)
+            embs = np.reshape(embs, (nb_emb, 1024))
+
+            yield (img, embs)
+
+
+# def get_n_batch(filelist, n, batch_size):
+#     it = get_exemple_from_filelist(filelist)
+

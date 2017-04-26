@@ -1,4 +1,4 @@
-from test import FLAGS, Model
+from model import FLAGS, Model
 import tensorflow as tf
 import pprint
 import os

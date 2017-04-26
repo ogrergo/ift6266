@@ -35,8 +35,8 @@ flags.DEFINE_string("input_fname_pattern", "*.jpg", "Glob pattern of filename of
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples")
 
-flags.DEFINE_string("model_type", "dcgan", "model type")
-flags.DEFINE_integer("read_threads", 8, "number of thread to read the batchs.")
+flags.DEFINE_string("version", "1", "model type")
+flags.DEFINE_integer("read_threads", 4, "number of thread to read the batchs.")
 
 flags.DEFINE_boolean("is_train", True, "True for training, False for testing")
 flags.DEFINE_boolean("visualize", True, "True for visualizing, False for nothing")
@@ -68,17 +68,18 @@ class Model():
         ## build cGAN model
         # self.y = tf.placeholder(tf.float32, [None, FLAGS.y_dim], name='y')
 
-        filenames = sorted(get_processed_dataset_files())[:-1]
+        filenames = get_train_dataset_filelist()
 
         image_batch, captions_batch, captions_fake_batch, z_batch = input_pipeline(filenames=filenames,
                                                                                   batch_size=FLAGS.batch_size,
                                                                                   read_threads=FLAGS.read_threads,
-                                                                                  z_dim=FLAGS.z_dim)
-
+                                                                                  z_dim=FLAGS.z_dim,
+                                                                                  nb_repeat_exemples=3)
         self.z = z_batch
         self.input_true = image_batch
-        self.embeddings_real = captions_batch#tf.placeholder(tf.float32, [None, 1024], name="embeddings")
-        self.embeddings_fake = captions_fake_batch#tf.placeholder(tf.float32, [None, 1024], name="embeddings")
+        self.embeddings_real = captions_batch #tf.placeholder(tf.float32, [None, 1024], name="embeddings")
+        self.embeddings_fake = captions_fake_batch #tf.placeholder(tf.float32, [None, 1024], name="embeddings")
+
         # self.input_true = tf.placeholder(tf.float32,
         #     [None, FLAGS.input_size, FLAGS.input_size, FLAGS.c_dim],
         #     name="input_true")
@@ -89,12 +90,6 @@ class Model():
         self.embeddings_real_sum = histogram_summary("emb", self.embeddings_real)
         self.embeddings_fake_sum = histogram_summary("emb_fake", self.embeddings_fake)
 
-
-
-        print(image_batch.get_shape())
-        print(captions_batch.get_shape())
-        print(captions_fake_batch.get_shape())
-        print(z_batch.get_shape())
 
         # mask center of image
         mask = np.ones((FLAGS.batch_size, 64, 64, 3), dtype='float32')
@@ -261,7 +256,7 @@ class Model():
 
     @property
     def model_dir(self):
-        return "{}_{}_{}".format("IFT6266", FLAGS.batch_size, FLAGS.model_type)
+        return "{}_{}_{}".format("IFT6266", FLAGS.batch_size, FLAGS.version)
 
     def save(self, checkpoint_dir, step):
         model_name = "DCGAN.model"
@@ -310,7 +305,7 @@ class Model():
         self.d_sum = merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum,
                                     self.d_loss_sum, self.d_loss_fake_captions_sum])
 
-        self.writer = SummaryWriter("./logs", self.session.graph)
+        self.writer = SummaryWriter(os.path.join("./logs", self.model_dir), self.session.graph)
 
         counter = 1
         could_load, checkpoint_counter = self.load(FLAGS.checkpoint_dir)
@@ -319,6 +314,13 @@ class Model():
             print(" [*] Load SUCCESS")
         else:
             print(" [!] Load failed...")
+
+        # a = tf.Print(self.g_sum, [self.z, self.input_true, self.embeddings_real, self.embeddings_fake])
+        # self.session.run([a])
+        # self.session.run([a])
+        # self.session.run([a])
+        # self.session.run([a])
+        # self.session.run([a])
 
         try:
             while not coord.should_stop():
@@ -368,7 +370,7 @@ class Model():
                 #     except:
                 #         print("one pic error!...")
 
-                print("counter %d"%counter)
+                print("[step:%d]"%counter)
                 if np.mod(counter, 500) == 2:
                     self.save(FLAGS.checkpoint_dir, counter)
 
