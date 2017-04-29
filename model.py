@@ -99,8 +99,6 @@ class Model():
 
         self.G = self.generator(self.z, border=self.input_border, embeddings=self.embeddings_real)
 
-        self.G_sampler = self.generator(self.z, reuse=True, border=self.input_border, embeddings=self.embeddings_real)
-
         self.D, self.D_logits = self.discriminator(self.input_true, reuse=False,
                                                    embeddings=self.embeddings_real)
 
@@ -154,7 +152,6 @@ class Model():
         with tf.variable_scope("discriminator") as scope:
             if reuse:
                 scope.reuse_variables()
-
 
             h0 = lrelu(conv2d(x, FLAGS.nb_filters_d, name='d_h0_conv'))
 
@@ -285,6 +282,14 @@ class Model():
         else:
             print(" [*] Failed to find a checkpoint")
             return False, 0
+
+    def eval(self, border, caption, z):
+
+        return self.session.run([self.G], {
+            self.z: z,
+            self.embeddings_real: caption,
+            self.input_border: border
+        })
 
     def train(self):
         d_optim = tf.train.AdamOptimizer(FLAGS.learning_rate, beta1=FLAGS.beta1) \
