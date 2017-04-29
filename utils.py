@@ -3,6 +3,7 @@ import pickle as pkl
 import glob
 import numpy as np
 import PIL.Image as Image
+import scipy.misc
 
 import tensorflow as tf
 from urllib.request import urlopen
@@ -124,7 +125,7 @@ def get_train_dataset_filelist():
 
 
 def get_valid_dataset_filelist():
-    return sorted(_get_processed_dataset_files())[-1]
+    return [sorted(_get_processed_dataset_files())[-1]]
 
 
 def _preprocess_image(image):
@@ -137,9 +138,7 @@ def _preprocess_embeddings(embeddings, nb_embeddings):
     combo = tf.random_uniform([nb_embeddings], minval=0, maxval=1)
     combo = combo / tf.reduce_sum(combo)
 
-    k = tf.reduce_sum(tf.transpose(embeddings) * combo, 1)
-    # print(k.get_shape())
-    return k
+    return tf.reduce_sum(tf.transpose(embeddings) * combo, 1)
 
 
 def decode_example_record(filename_queue):
@@ -216,7 +215,9 @@ def input_pipeline(filenames, batch_size, read_threads, nb_repeat_exemples=1, nu
 
 def get_exemple_from_filelist(filelist):
     for f in filelist:
-        for str_record in tf.python_io.tf_record_iterator(f):
+        records = list(tf.python_io.tf_record_iterator(f))
+        np.random.shuffle(records)
+        for str_record in records:
             example = tf.train.Example()
             example.ParseFromString(str_record)
 
@@ -227,12 +228,57 @@ def get_exemple_from_filelist(filelist):
             nb_emb = int(example.features.feature['embeddings_len'].int64_list.value[0])
 
             embs = example.features.feature['embeddings'].bytes_list.value[0]
-            embs = np.fromstring(embs, dtype=np.uint8)
+            embs = np.fromstring(embs, dtype=np.float32)
             embs = np.reshape(embs, (nb_emb, 1024))
 
             yield (img, embs)
 
 
-# def get_n_batch(filelist, n, batch_size):
-#     it = get_exemple_from_filelist(filelist)
+def get_border(imgs):
+    result = np.copy(imgs)
 
+    if imgs.ndim == 3:
+        result[16:48, 16:48, :] = np.zeros((32,32,3))
+    else:
+        shape = (imgs.shape[0], 32, 32, 3)
+        result[:, 16:48, 16:48, :] = np.zeros(shape)
+
+    return result.astype(np.float32) * 2. / 255. - 1.
+
+
+def get_embedding(data):
+    if isinstance(data, np.ndarray) and data.ndim == 2:
+        return data[np.random.random_integers(0, data.shape[0] - 1)]
+    else:
+        return np.array([emb[np.random.random_integers(0, emb.shape[0] - 1)] for emb in data])
+
+
+def to_RGB(img):
+    return ((img + 1) * 255 / 2).astype(np.uint8)
+
+
+def concat_img(img, border=8):
+    shape = img.shape
+    h = shape[0]
+    w = shape[1]
+
+    result = np.zeros(shape=(h * border, w * border, 3), dtype=img.dtype)
+
+    for i, _img in enumerate(img):
+        x, y = (i % border, i // border)
+        result[x * h: (x + 1) * h, y * w: (y + 1)* w, :] = _img
+
+    return result
+
+
+def save_batch(batch, folder, img_tag=None):
+    img = to_RGB(concat_img(batch))
+    file = os.path.join(folder, img_name(img_tag))
+    scipy.misc.imsave(file, img)
+
+
+def img_name(tag):
+    if not tag:
+        tag = "default"
+
+    return "{}.jpg".format(tag)
