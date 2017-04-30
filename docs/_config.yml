@@ -11,6 +11,7 @@ email: louis.vanbeurden@gmail.com
 baseurl: "/ift6266" # the subpath of your site, e.g. /blog
 url: "https://ogrergo.github.io/" # the base hostname & protocol for your site
 github_username:  ogrergo
+description: This site is the blog of the project of Louis van Beurden for the course ift6266. You can find the project description here https://ift6266h17.wordpress.com/project-description .
 
 # Build settings
 markdown: kramdown
