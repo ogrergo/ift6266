@@ -1,6 +1,8 @@
 import os
 import pickle as pkl
 import glob
+
+import bidict
 import numpy as np
 import PIL.Image as Image
 import scipy.misc
@@ -8,7 +10,7 @@ import scipy.misc
 import tensorflow as tf
 from urllib.request import urlopen
 
-dataset = "../dataset"
+dataset = "_dataset"
 
 mscoco = os.path.join(dataset, "inpainting")
 train_images = os.path.join(mscoco, "train2014")
@@ -78,7 +80,7 @@ def load_embeddings_data():
 
     if sentence_mapping is None:
         with open(sentence_mapping_file, 'rb') as fd:
-            sentence_mapping = pkl.load(fd)
+            sentence_mapping = bidict.bidict(pkl.load(fd))
 
 
 def get_embeddings(filelist=None, batch_size=None):
@@ -234,23 +236,23 @@ def get_exemple_from_filelist(filelist):
             yield (img, embs)
 
 
-def get_border(imgs):
-    result = np.copy(imgs)
+def to_float(imgs):
+    return imgs.astype(np.float32) * 2. / 255. - 1.
 
-    if imgs.ndim == 3:
-        result[16:48, 16:48, :] = np.zeros((32,32,3))
+def get_border(k):
+    return k
+
+def get_embedding(data, combo=False):
+    if combo:
+        n = data.shape[0]
+        coef = np.random.uniform(size=(n,))
+        coef = coef / np.sum(coef)
+        return np.dot(coef, data)
     else:
-        shape = (imgs.shape[0], 32, 32, 3)
-        result[:, 16:48, 16:48, :] = np.zeros(shape)
-
-    return result.astype(np.float32) * 2. / 255. - 1.
-
-
-def get_embedding(data):
-    if isinstance(data, np.ndarray) and data.ndim == 2:
-        return data[np.random.random_integers(0, data.shape[0] - 1)]
-    else:
-        return np.array([emb[np.random.random_integers(0, emb.shape[0] - 1)] for emb in data])
+        if isinstance(data, np.ndarray) and data.ndim == 2:
+            return data[np.random.random_integers(0, data.shape[0] - 1)]
+        else:
+            return np.array([emb[np.random.random_integers(0, emb.shape[0] - 1)] for emb in data])
 
 
 def to_RGB(img):
@@ -277,8 +279,46 @@ def save_batch(batch, folder, img_tag=None):
     scipy.misc.imsave(file, img)
 
 
+def save_image(img, emb, folder):
+    try:
+        title = get_sentence_from_embedding(emb)
+    except ValueError:
+        print("Can't save img, skipping...")
+        return
+
+    if not os.path.isdir(folder):
+        os.makedirs(folder, exist_ok=True)
+
+    path = os.path.join(folder, title + '.jpg')
+    img = to_RGB(img)
+    scipy.misc.imsave(path, img)
+
+
 def img_name(tag):
     if not tag:
         tag = "default"
 
     return "{}.jpg".format(tag)
+
+
+def get_sentence_from_embedding(emb):
+    load_embeddings_data()
+    index = np.where(np.all(embeddings == emb, axis=1))[0]
+    if len(index) == 0:
+        raise ValueError("Embedding not found")
+
+    index = index[0]
+    if index not in sentence_mapping.inv:
+        raise ValueError("Embedding not found")
+
+    return sentence_mapping.inv[index]
+
+
+def interpolate_noise(z0, z1, step=64):
+    result = np.empty(shape=(step, z0.shape[0]), dtype=np.float32)
+
+    for i in range(step):
+        t = float(i)/step
+        result[i] = z1 * t + z0 * (1 - t)
+
+    return result

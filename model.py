@@ -35,7 +35,7 @@ flags.DEFINE_string("input_fname_pattern", "*.jpg", "Glob pattern of filename of
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples")
 
-flags.DEFINE_string("version", "1", "model type")
+flags.DEFINE_string("version", "1.1", "model type")
 flags.DEFINE_integer("read_threads", 4, "number of thread to read the batchs.")
 
 flags.DEFINE_boolean("is_train", True, "True for training, False for testing")
@@ -182,74 +182,46 @@ class Model():
 
             train = not reuse
 
-            if border is not None:
-                # border dim is (64, 64, 64, 3)
-                s_h, s_w = FLAGS.output_size, FLAGS.output_size
-                s_h2, s_h4 = int(s_h / 2), int(s_h / 4)
-                s_w2, s_w4 = int(s_w / 2), int(s_w / 4)
+            # border dim is (64, 64, 64, 3)
+            s_h, s_w = FLAGS.output_size, FLAGS.output_size
+            s_h2, s_h4 = int(s_h / 2), int(s_h / 4)
+            s_w2, s_w4 = int(s_w / 2), int(s_w / 4)
 
-                ## build conv network
+            ## build conv network
 
-                b0 = max_pooling(tf.nn.relu(self.g_bn3(
-                    conv2d(border, FLAGS.nb_filters_g//2, name="g_b0_conv"), train=train)), s_h2)
+            b0 = max_pooling(tf.nn.relu(self.g_bn3(
+                conv2d(border, FLAGS.nb_filters_g//2, name="g_b0_conv"), train=train)), s_h2)
 
-                b1 = max_pooling(tf.nn.relu(self.g_bn4(
-                    conv2d(b0, FLAGS.nb_filters_g, name="g_b1_conv"), train=train)), s_h4)
+            b1 = max_pooling(tf.nn.relu(self.g_bn4(
+                conv2d(b0, FLAGS.nb_filters_g, name="g_b1_conv"), train=train)), s_h4)
 
-                y = tf.nn.relu(self.g_bn5(linear(
-                    tf.reshape(b1, [FLAGS.batch_size, s_h4 * s_w4 * FLAGS.nb_filters_g]), 100, "g_border_lin")))
+            y = tf.nn.relu(self.g_bn5(linear(
+                tf.reshape(b1, [FLAGS.batch_size, s_h4 * s_w4 * FLAGS.nb_filters_g]), 100, "g_border_lin")))
 
-                y_emb = linear(embeddings, 300, "g_project_emb")
+            y_emb = linear(embeddings, 300, "g_project_emb")
 
-                z = concat([z, y_emb], 1)
+            z = concat([z, y_emb], 1)
 
-                h0 = tf.nn.relu(self.g_bn0(linear(z, FLAGS.nb_fc, 'g_h0_lin'), train=train))
-                h0 = concat([h0, y], 1)
+            h0 = tf.nn.relu(self.g_bn0(linear(z, FLAGS.nb_fc, 'g_h0_lin'), train=train))
+            h0 = concat([h0, y], 1)
 
-                h1 = tf.nn.relu(self.g_bn1(linear(h0, FLAGS.nb_filters_g * 2 * s_h4 * s_w4, 'g_h1_lin'), train=train))
-                
-                s = int(h1.get_shape()[1]) // (s_h4**2)
-                h1 = tf.reshape(h1, [FLAGS.batch_size, s_h4, s_w4, s])
+            h1 = tf.nn.relu(self.g_bn1(linear(h0, FLAGS.nb_filters_g * 2 * s_h4 * s_w4, 'g_h1_lin'), train=train))
 
-                h1 = concat([h1, b1], 3)
+            s = int(h1.get_shape()[1]) // (s_h4**2)
+            h1 = tf.reshape(h1, [FLAGS.batch_size, s_h4, s_w4, s])
 
-                h2 = tf.nn.relu(self.g_bn2(
-                    deconv2d(h1, [FLAGS.batch_size, s_h2, s_w2, FLAGS.nb_filters_g * 2], name='g_h2'), train=train))
+            h1 = concat([h1, b1], 3)
 
-                h2 = concat([h2, b0], 3)
+            h2 = tf.nn.relu(self.g_bn2(
+                deconv2d(h1, [FLAGS.batch_size, s_h2, s_w2, FLAGS.nb_filters_g * 2], name='g_h2'), train=train))
 
-                h3 = tf.nn.tanh(deconv2d(h2, [FLAGS.batch_size, s_h, s_w, FLAGS.c_dim], name='g_h3'))
-                center = tf.pad(h3, [[0, 0],[16, 16], [16, 16], [0, 0]], "CONSTANT")
+            h2 = concat([h2, b0], 3)
 
-                out = border + center
-                return out
+            h3 = tf.nn.tanh(deconv2d(h2, [FLAGS.batch_size, s_h, s_w, FLAGS.c_dim], name='g_h3'))
+            center = tf.pad(h3, [[0, 0],[16, 16], [16, 16], [0, 0]], "CONSTANT")
 
-            else:
-                s_h, s_w = FLAGS.output_size, FLAGS.output_size
-                s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-                s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-                s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-                s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
-
-            # project `z` and reshape
-                h0 = tf.reshape(
-                    linear(z, FLAGS.nb_filters_g*8*s_h16*s_w16, 'g_h0_lin'),
-                    [-1, s_h16, s_w16, FLAGS.nb_filters_g * 8])
-
-                h0 = tf.nn.relu(self.g_bn0(h0, train=train))
-
-                h1 = deconv2d(h0, [FLAGS.batch_size, s_h8, s_w8, FLAGS.nb_filters_g*4], name='g_h1')
-                h1 = tf.nn.relu(self.g_bn1(h1, train=train))
-
-                h2 = deconv2d(h1, [FLAGS.batch_size, s_h4, s_w4, FLAGS.nb_filters_g*2], name='g_h2')
-                h2 = tf.nn.relu(self.g_bn2(h2, train=train))
-
-                h3 = deconv2d(h2, [FLAGS.batch_size, s_h2, s_w2, FLAGS.nb_filters_g*1], name='g_h3')
-                h3 = tf.nn.relu(self.g_bn3(h3, train=train))
-
-                h4 = deconv2d(h3, [FLAGS.batch_size, s_h, s_w, FLAGS.c_dim], name='g_h4')
-
-                return tf.nn.tanh(h4)
+            out = border + center
+            return out
 
     @property
     def model_dir(self):
@@ -283,12 +255,12 @@ class Model():
             print(" [*] Failed to find a checkpoint")
             return False, 0
 
-    def eval(self, border, caption, z):
+    def eval(self, image, caption, z):
 
         return self.session.run([self.G], {
             self.z: z,
             self.embeddings_real: caption,
-            self.input_border: border
+            self.input_true: image
         })
 
     def train(self):

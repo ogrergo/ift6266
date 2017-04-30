@@ -88,10 +88,10 @@ def load_data(start, n):
 
 
 def get_border(imgs):
-    shape = imgs.shape[0:2] + (32, 32)
+    shape = imgs.shape[0] + (32, 32, 3)
     result = np.copy(imgs)
     result[:,:,16:48,16:48] = np.zeros(shape)
-    return result
+    return result.astype(np.float32) * 2. / 255. - 1.
 
 
 def get_center(imgs):
