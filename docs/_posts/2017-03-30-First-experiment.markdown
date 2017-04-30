@@ -15,4 +15,4 @@ I trained the model on (border, full image) pairs with Adam optimizer to minimiz
 ### Results
 The results are not promising, the L2 loss producing blur images. Here some results I get on the training set:
 
-[ae]()
+![ae](https://raw.githubusercontent.com/ogrergo/ift6266/master/docs/static_files/VAE.bmp "results of the ae")
