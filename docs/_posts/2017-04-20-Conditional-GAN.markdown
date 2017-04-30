@@ -8,7 +8,7 @@ date:   2017-04-20 16:29:55 -0400
 
 ## Model
 Here a schema of the generator architecture :
-![generator](/home/louis/code/ift6266/docs/static_files/Archi gen.jpg "archi generator")
+![generator](https://github.com/ogrergo/ift6266/tree/master/docs/static_files/Archi gen.jpg "archi generator")
 
 The different models are defined in [model.py](https://github.com/ogrergo/ift6266/blob/master/model.py).
 
