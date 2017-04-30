@@ -10,3 +10,4 @@ keras
 bidict
 tensorflow
 dask
+toolz
