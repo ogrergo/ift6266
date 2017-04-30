@@ -1,0 +1,23 @@
+---
+layout: post
+title:  "Results"
+date:   2017-04-27 22:26:09 -0400
+---
+# Results
+
+
+It is difficult to evaluate this model, because there is no clear metric to measure the "realness" of images.
+
+Here some of the results I get:
+![alt text](https://raw.githubusercontent.com/ogrergo/ift6266/master/docs/static_files/random.jpg "Results")
+
+I have tried to generate with false captions, to see if the generator have learnt to use them :
+![alt text](https://raw.githubusercontent.com/ogrergo/ift6266/master/docs/static_files/wrong_captions.jpg "Wrong captions")
+
+We not see some clear difference. I think the conditioning on the caption is not significant in this generator model. However, the loss `Ld_fake_captions`
+go to zero on the discriminator, that mean that the discriminator predict the reject class (0) for images from the dataset with an invalid caption. The discriminator is then able to use the information contained in the embeddings.
+Then the generator inability to
+In future work, I should see to a better conditioning on the caption in the generator.
+
+
+But we can instead experiment a variation on the conditioning to observe the dependance the model have learn on it.

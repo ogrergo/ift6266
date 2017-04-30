@@ -3,7 +3,6 @@ layout: post
 title:  "Conditional GAN"
 date:   2017-04-20 16:29:55 -0400
 ---
-
 # Conditional GAN
 
 ## Model
@@ -43,6 +42,9 @@ The captions embeddings are concatenate with the noise vector in the generator, 
 
 ## Training
 
+I have trained the model with Adam optimizer with a learning rate of `0.0002` and the beta1 parameter set to `0.5`.
+
+
 ### Discriminator loss
 Here the loss of the discriminator:
 ```Ld = 0.5*Ld_real + 0.25*(Ld_fake_captions + Ld_generator_imgs)```
@@ -57,7 +59,7 @@ The generator is trained to fool the discriminator, to predict the accept class 
 
 
 ### GPU
-I have use Amazon instance to train my models. I used p2.xlarge instance, which are equipped with Kepler M80 GPU. I trained this model for 10 epoch for 2 days.
+I have use Amazon instance to train my models. I used p2.xlarge instance, which are equipped with NVIDIA K80 GPU. I trained this model for 10 epoch for 2 days.
 
 
 ### Training set
