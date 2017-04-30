@@ -1,6 +1,7 @@
 import os
 import pickle as pkl
 import glob
+from itertools import groupby
 
 import bidict
 import numpy as np
@@ -279,7 +280,7 @@ def save_batch(batch, folder, img_tag=None):
     scipy.misc.imsave(file, img)
 
 
-def save_image(img, emb, folder):
+def save_image(img, emb, folder, id=None):
     try:
         title = get_sentence_from_embedding(emb)
     except ValueError:
@@ -289,7 +290,10 @@ def save_image(img, emb, folder):
     if not os.path.isdir(folder):
         os.makedirs(folder, exist_ok=True)
 
-    path = os.path.join(folder, title + '.jpg')
+    if id is None:
+        id = ''
+
+    path = os.path.join(folder, title + id + '.jpg')
     img = to_RGB(img)
     scipy.misc.imsave(path, img)
 
@@ -322,3 +326,13 @@ def interpolate_noise(z0, z1, step=64):
         result[i] = z1 * t + z0 * (1 - t)
 
     return result
+
+def _make_batch(val):
+    return np.repeat(np.expand_dims(val, 0), 64, axis=0)
+
+def _get_batch(exemple_it, size=64):
+    g = next(groupby(enumerate(exemple_it), key=lambda e: e[0] // size))
+
+    g = tuple(zip(*g[1]))  # remove index of enumerate
+    g = tuple(zip(*g[1]))  # two list, one img and other is emb
+    return (np.array(g[0]), np.array(g[1]))

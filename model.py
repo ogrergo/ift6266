@@ -1,16 +1,7 @@
-import glob
-import os
-
-import tensorflow as tf
-import numpy as np
-import time
-
-from dask.array.chunk import mean
-
 from op import *
 
 from utils import *
-# from utils_old import save_images
+from utils import _get_batch
 
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 100, "Epoch to train")
@@ -35,7 +26,7 @@ flags.DEFINE_string("input_fname_pattern", "*.jpg", "Glob pattern of filename of
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples")
 
-flags.DEFINE_string("version", "1.1", "model type")
+flags.DEFINE_string("version", "2", "model type")
 flags.DEFINE_integer("read_threads", 4, "number of thread to read the batchs.")
 
 flags.DEFINE_boolean("is_train", True, "True for training, False for testing")
@@ -98,6 +89,8 @@ class Model():
 
 
         self.G = self.generator(self.z, border=self.input_border, embeddings=self.embeddings_real)
+        self.sampler = self.generator(self.z, border=self.input_border, embeddings=self.embeddings_real, reuse=True)
+
 
         self.D, self.D_logits = self.discriminator(self.input_true, reuse=False,
                                                    embeddings=self.embeddings_real)
@@ -196,15 +189,11 @@ class Model():
                 conv2d(b0, FLAGS.nb_filters_g, name="g_b1_conv"), train=train)), s_h4)
 
             y = tf.nn.relu(self.g_bn5(linear(
-                tf.reshape(b1, [FLAGS.batch_size, s_h4 * s_w4 * FLAGS.nb_filters_g]), 100, "g_border_lin")))
+                tf.reshape(b1, [FLAGS.batch_size, s_h4 * s_w4 * FLAGS.nb_filters_g]), 300, "g_border_lin")))
 
-            y_emb = linear(embeddings, 300, "g_project_emb")
-
-            z = concat([z, y_emb], 1)
+            z = concat([z, embeddings, y], 1)
 
             h0 = tf.nn.relu(self.g_bn0(linear(z, FLAGS.nb_fc, 'g_h0_lin'), train=train))
-            h0 = concat([h0, y], 1)
-
             h1 = tf.nn.relu(self.g_bn1(linear(h0, FLAGS.nb_filters_g * 2 * s_h4 * s_w4, 'g_h1_lin'), train=train))
 
             s = int(h1.get_shape()[1]) // (s_h4**2)
@@ -257,7 +246,7 @@ class Model():
 
     def eval(self, image, caption, z):
 
-        return self.session.run([self.G], {
+        return self.session.run([self.sampler], {
             self.z: z,
             self.embeddings_real: caption,
             self.input_true: image
@@ -292,62 +281,45 @@ class Model():
         else:
             print(" [!] Load failed...")
 
-        # a = tf.Print(self.g_sum, [self.z, self.input_true, self.embeddings_real, self.embeddings_fake])
-        # self.session.run([a])
-        # self.session.run([a])
-        # self.session.run([a])
-        # self.session.run([a])
-        # self.session.run([a])
+        valid_set = get_exemple_from_filelist(get_valid_dataset_filelist())
+        sample_z = np.random.normal(size=(64, 100))
+        b = _get_batch(valid_set)
+        sample_inputs = to_float(b[0])
+        sample_emb = get_embedding(b[1])
 
         try:
             while not coord.should_stop():
 
                 # Update D network
                 _, summary_str = self.session.run([d_optim, self.d_sum])
-                                               #    ,
-                                               # feed_dict={self.input_true: batch,
-                                               #            self.z: batch_z,
-                                               #            self.embeddings_real: batch_emb,
-                                               #            self.embeddings_fake: batch_emb_fake})
                 self.writer.add_summary(summary_str, counter)
 
                 # Update G network
                 _, summary_str = self.session.run([g_optim, self.g_sum],)
-                                               # feed_dict={self.input_true: batch,
-                                               #            self.z: batch_z,
-                                               #            self.embeddings_real:batch_emb})
                 self.writer.add_summary(summary_str, counter)
 
-                # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
                 _, summary_str = self.session.run([g_optim, self.g_sum],)
-                                               # feed_dict={self.input_true: batch,
-                                               #            self.z: batch_z,
-                                               #            self.embeddings_real:batch_emb})
                 self.writer.add_summary(summary_str, counter)
-
 
                 counter += 1
 
-                # if np.mod(counter, 2) == 1:
-                #     try:
-                #         samples, d_loss, g_loss = self.session.run(
-                #             [self.G_sampler, self.d_loss, self.g_loss],
-                #             feed_dict={
-                #                 self.z: sample_z,
-                #                 self.input_true: sample_inputs,
-                #                 self.embeddings_real: sample_emb
-                #             },
-                #         )
-                #
-                #         manifold_h = int(np.ceil(np.sqrt(samples.shape[0])))
-                #         manifold_w = int(np.floor(np.sqrt(samples.shape[0])))
-                #         save_images(samples, [manifold_h, manifold_w],
-                #                     './{}/train_{:02d}_{:04d}.png'.format(FLAGS.sample_dir, epoch, idx))
-                #         print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
-                #     except:
-                #         print("one pic error!...")
+                if np.mod(counter, 1000) == 1:
+                    try:
+                        samples, d_loss, g_loss = self.session.run(
+                            [self.sampler, self.d_loss, self.g_loss],
+                            feed_dict={
+                                self.z: sample_z,
+                                self.input_true: sample_inputs,
+                                self.embeddings_real: sample_emb
+                            },
+                        )
+                        save_batch(samples, FLAGS.sample_dir, 'train_{:02d}'.format(counter))
+                        print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
+                    except:
+                        print("one pic error!...")
 
                 print("[step:%d]"%counter)
+
                 if np.mod(counter, 500) == 2:
                     self.save(FLAGS.checkpoint_dir, counter)
 

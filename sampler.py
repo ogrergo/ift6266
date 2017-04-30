@@ -1,6 +1,7 @@
 from itertools import groupby
 
-from utils import get_border, get_embedding, save_batch, to_float, save_image, interpolate_noise
+from utils import get_border, get_embedding, save_batch, to_float, save_image, interpolate_noise, _make_batch, \
+    _get_batch
 from model import FLAGS, Model
 import tensorflow as tf
 import pprint
@@ -100,16 +101,6 @@ def caption_random_combo(dcgan, exemple_it):
     result = dcgan.eval(image=batch_border, caption=batch_captions, z=batch_z)
     save_batch(result[0], 'samples', img_tag='caption_random_combo')
 
-
-def _make_batch(val):
-    return np.repeat(np.expand_dims(val, 0), 64, axis=0)
-
-def _get_batch(exemple_it, size=64):
-    g = next(groupby(enumerate(exemple_it), key=lambda e: e[0] // size))
-
-    g = tuple(zip(*g[1]))  # remove index of enumerate
-    g = tuple(zip(*g[1]))  # two list, one img and other is emb
-    return (np.array(g[0]), np.array(g[1]))
 
 
 if __name__ == '__main__':
