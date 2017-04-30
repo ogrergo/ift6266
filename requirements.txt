@@ -9,3 +9,4 @@ pydot-ng
 keras
 bidict
 tensorflow
+dask
